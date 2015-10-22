@@ -1,6 +1,6 @@
 ---
 title: "FISH 627: Homework 3"
-author: "Your Name Here"
+author: "Jared Weems"
 date: "Due by end of Thursday, October 22, 2015"
 output: html_document
 ---
@@ -19,21 +19,31 @@ library(lattice)
 attach(environmental) #attach can induce some issues so we will detach asap
 enviro <- environmental
 detach(environmental)
+enviro
 ```
 
 Plot a histogram of ozone using *'hist'*. Compare a histogram of these "raw" ozone values to one that uses 3^rd^ root transformed values (ozone^(1/3)). <span style="color:blue"> Describe the difference and explain
 why we would want to transform the ozone variable if used as dependent variable in a typical regression (this requires some familiarity with standard regression assumptions).</span> 
 
 ```{r a}
+# generate histogram of ozone data
+hist(enviro$ozone)
+
+# generate histogram of third root ozone data
+hist(enviro$ozone^(1/3))
+
+# The difference between raw and third root data is the latter normalizes the ozone data distribution, therefore changing the shape of the histogram toward normal distribution.
+# We want to transform the ozone data in this manner to take non-linear relationships between ozone and other measurement variables and make them linear when doing regression analysis.
 
 ```
-
 
 
 **b.**
 <span style="color:red">(0.5 pt.)</span> Fit a LOWESS model of (transformed) ozone levels on wind and temperature using the 'loess' function, similar to the model for GAK 1 temperatures that we fit in Module 8:
 ```{r b, eval=FALSE}
-ozol <- loess(formula, span = 1, degree = 2)
+# Fit lowess model of transformed ozone by wind and temperature
+ozo1 <- loess(ozone^(1/3) ~ wind + temperature, enviro, span = 1, degree = 2)
+summary(ozol)
 ```
 
 Use the suggested setting and insert the appropriate *formula*.
@@ -43,8 +53,16 @@ Use the suggested setting and insert the appropriate *formula*.
 transformed scale!!) against the fitted values. Add a 1:1 line to the plot (intercept 0, slope 1) that 
 would denote a perfect fit (i.e. a 1:1 correspondence):  
 ```abline(0,1)```
-```{r c}
 
+```{r c}
+# extract regression coefficients: fitted and resid
+ozo1.fitted <- fitted(ozo1)
+ozo1.resid <- resid(ozo1)
+
+# plot observed, transformed values vs. predicted, fitted values
+plot(ozo1.fitted, enviro$ozone^(1/3), xlab = "Fitted values", 
+  ylab = "Observed values", cex.lab=1.5)
+abline(0,1, col=2) # 1:1 line
 ```
 
 **d.**
@@ -55,7 +73,20 @@ values around the fitted values and is typically quantified by the 'residual sta
 You can view the residual standard error in the summary output using:  
 ```summary(ozo1)```
 ```{r d}
+# pull out the ozone standard error
+sumkmary(ozo1)
+# Residual Standard Error: 0.501
+# alternatively
+str(ozo1)
 
+# Create or extect summary values s, p, n
+(s <- ozo1$s)
+(p <- ozo1$enp)  
+(n <- ozo1$n)
+
+# calculate the residuals instead, should be close to s
+(ozo1.resid2 <- sqrt(sum(resid(ozo1)^2)/(n-p)))
+# 0.4971813 is close to (s <- ozo1$s) = 0.501044
 ```
 
 For comparison, compute the standard error directly from the residuals. The residual standard error can be estimated as:  
@@ -86,7 +117,9 @@ Verify that the sum of the fitted values and the residuals is equal to the obser
 (e.g. by plotting (fitted values + residual values) against (observed values) or by computing the 
 differences, which should all be 0).
 ```{r e}
-
+# plot fitted values + residual values agains observed
+plot(ozo1.fitted + ozo1.resid, enviro$ozone^(1/3), xlab = "Fitted values", ylab = "Observed values", cex.lab=1.5)
+abline(0,1, col=2) # 1:1 line)
 ```
 
 **f.**
@@ -104,7 +137,24 @@ should roughly fall on a straight line:
    ```qqnorm(resid(ozo1))```  
    ```qqline(resid(ozo1))```
 ```{r f}
+# create diagnostic plots frame
+par(mfrow=c(2,2))
 
+# 1. Plot residuals (on y-axis) against fitted values, add a horizontal line at 0 (```abline(h=0)```)
+plot(ozo1.fitted, ozo1.resid, xlab = "Fitted values", ylab = "Residuals", cex.lab=1.5)
+abline(h=0) # horizontal line)
+
+# 2. Plot residuals against wind and add line at 0
+plot(enviro$wind, ozo1.resid, xlab = "Wind", ylab = "Residuals", cex.lab=1.5)
+abline(h=0) # horizontal line)
+
+# 3. Plot residuals against temperature and add line at 0
+plot(enviro$temperature, ozo1.resid, xlab = "Temperature", ylab = "Residuals", cex.lab=1.5)
+abline(h=0) # horizontal line)
+
+# 4. Create a ```qqplot``` that compares the quantiles of the residual distribution against the corresponding quantiles of a normal distribution. If residuals are normally distributed, they should roughly fall on a straight line:   ```qqnorm(resid(ozo1))```  
+qqnorm(resid(ozo1))
+abline(0,0.5) # 1:1 line)
 ```
 
 <span style="color:blue"> Briefly discuss whether the regression assumptions are met: There should be no obvious patterns in the residuals (i.e. they should be randomly distributed around the zero line), no 
@@ -147,7 +197,30 @@ x,y,z values as ```image```, but be sure to set ```add=T``` to add contours to t
 
 <span style="color:blue"> Comment on the ability of the model to estimate ozone levels at a wind speed of 20mph when temperatures are in the 80s or 90s!</span> 
 ```{r g}
+# find max and min of wind and temperature
+max.wind <- max(enviro$wind)
+min.wind <- min(enviro$wind)
+max.temp <- max(enviro$temperature)
+min.temp <- min(enviro$temperature)
 
+# create vector sequences across wind and temperature
+wind.fit.seq <- seq(min.wind, max.wind, length.out=50)
+temp.fit.seq <- seq(min.temp, max.temp, length.out=50)
+
+# create matrix of wind and temp sequences
+grd <- expand.grid(list(wind=wind.fit.seq, temperature=temp.fit.seq))
+grd
+
+# predict the values of ozo1 using grd
+ozo1.fit <- predict(ozo1, newdata = grd)
+
+# Use the fitted lowess model to get predicted values for each x- and y-value in 'grd'
+image(wind.fit.seq, temp.fit.seq, ozo1.fit,col = topo.colors(80), 
+      xlab="Wind", ylab="Temp", cex.axis=1.2, cex.lab=1.4)
+# Add contours:
+contour(x,y,z,add=T, labcex=1.5)
+# show when measurements were taken:
+points(GAK1$year[j], GAK1$depth[j], pch=16, cex=0.5, col=2) 
 ```
 
 **h.**
